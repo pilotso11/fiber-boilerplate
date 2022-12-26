@@ -1,8 +1,14 @@
-FROM golang:1.15
+FROM golang:1.19
 
-WORKDIR /go/src/app
+WORKDIR /app
+ENV CGO_ENABLED=0
+COPY go.* .
+RUN go mod download
+
 COPY . .
+RUN --mount=type=cache,target=/root/.cache/go-build \
+go build -o docker-fiber-boilerplate
+EXPOSE 8080
 
-RUN go get -d -v ./...
+ENTRYPOINT ["/app/docker-fiber-boilerplate"]
 
-ENTRYPOINT ["/bin/bash", "-c", "go run main.go"]

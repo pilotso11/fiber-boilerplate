@@ -36,6 +36,11 @@ services:
       - secrets.env
     environment:
       SECRETS_PATH: /run/secrets/secrets.env
+      DB_HOST: postgres
+      DB_PORT: 5432
+      SESSION_HOST: postgres
+      SESSION_PORT: 5432
+
 
 
 
