@@ -3,13 +3,14 @@ package routes
 import (
 	Controller "fiber-boilerplate/app/controllers/api"
 	"fiber-boilerplate/database"
+	hashing "github.com/thomasvvugt/fiber-hashing"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-func RegisterAPI(api fiber.Router, db *database.Database) {
+func RegisterAPI(api fiber.Router, db *database.Database, hasher hashing.Driver) {
 	registerRoles(api, db)
-	registerUsers(api, db)
+	registerUsers(api, db, hasher)
 }
 
 func registerRoles(api fiber.Router, db *database.Database) {
@@ -22,12 +23,12 @@ func registerRoles(api fiber.Router, db *database.Database) {
 	roles.Delete("/:id", Controller.DeleteRole(db))
 }
 
-func registerUsers(api fiber.Router, db *database.Database) {
+func registerUsers(api fiber.Router, db *database.Database, hasher hashing.Driver) {
 	users := api.Group("/users")
 
 	users.Get("/", Controller.GetAllUsers(db))
 	users.Get("/:id", Controller.GetUser(db))
-	users.Post("/", Controller.AddUser(db))
-	users.Put("/:id", Controller.EditUser(db))
+	users.Post("/", Controller.AddUser(db, hasher))
+	users.Put("/:id", Controller.EditUser(db, hasher))
 	users.Delete("/:id", Controller.DeleteUser(db))
 }

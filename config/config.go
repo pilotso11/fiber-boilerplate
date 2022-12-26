@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -27,10 +28,13 @@ import (
 
 	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/storage/memcache"
+
 	fMysql "github.com/gofiber/storage/mysql"
 	fPostgres "github.com/gofiber/storage/postgres"
 	fRedis "github.com/gofiber/storage/redis"
 	fSQLite "github.com/gofiber/storage/sqlite3"
+
+	"github.com/goccy/go-json"
 )
 
 type Config struct {
@@ -93,7 +97,27 @@ func New() *Config {
 
 	config.SetErrorHandler(defaultErrorHandler)
 
-	// TODO: Logger (Maybe a different zap object)
+	// Load secrets and copy all secrets from the secrets env file into into Config
+	secretsPath := config.GetString("SECRETS_PATH")
+	if len(secretsPath) > 0 {
+		secretConfig := viper.New()
+		secretConfig.SetConfigFile(secretsPath)
+		secretConfig.SetConfigType("dotenv")
+		// Read configuration
+		if err := secretConfig.ReadInConfig(); err != nil {
+			if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+				log.Fatal("failed to read secrets:", secretsPath, err.Error())
+			}
+		}
+		// Copy the values
+		for _, k := range secretConfig.AllKeys() {
+			val := secretConfig.GetString(k)
+			if len(val) > 0 {
+				config.Set(k, val)
+			}
+		}
+
+	}
 
 	// TODO: Add APP_KEY generation
 
@@ -222,6 +246,9 @@ func (config *Config) setDefaults() {
 	config.SetDefault("MW_FIBER_CORS_EXPOSEHEADERS", "")
 	config.SetDefault("MW_FIBER_CORS_MAXAGE", 0)
 
+	// Set default Fiber HELMET middleware configuration
+	config.SetDefault("MW_FIBER_HELMET_ENABLED", false)
+
 	// Set default Fiber CSRF middleware configuration
 	config.SetDefault("MW_FIBER_CSRF_ENABLED", false)
 	config.SetDefault("MW_FIBER_CSRF_TOKENLOOKUP", "header:X-CSRF-Token")
@@ -260,6 +287,22 @@ func (config *Config) setDefaults() {
 	config.SetDefault("MW_FIBER_REQUESTID_ENABLED", false)
 	config.SetDefault("MW_FIBER_REQUESTID_HEADER", "X-Request-ID")
 	config.SetDefault("MW_FIBER_REQUESTID_CONTEXTKEY", "requestid")
+
+	// OAUTH2
+	config.SetDefault("MW_OAUTH2_ENABLED", false)
+	config.SetDefault("MW_OAUTH2_BASEURL", "/oauth")
+	config.SetDefault("MW_OAUTH2_KEY", "")
+	config.SetDefault("MW_OAUTH2_SECRET", "")
+	config.SetDefault("MW_OAUTH2_PROVIDER", "")
+	config.SetDefault("MW_OAUTH2_AUTH0_DOMAIN", "")
+	config.SetDefault("MW_OAUTH2_ORG_URL", "")
+	config.SetDefault("MW_OAUTH2_CALLBACK_SERVER", "http://localhost:8080")
+	config.SetDefault("MW_OAUTH2_AFTER_LOGIN_REDIRECT_URL", "/")
+	config.SetDefault("MW_OAUTH2_AFTER_LOGOUT_REDIRECT_URL", "/")
+
+	// Secrets to laod in
+	config.SetDefault("SECRETS_PATH", "")
+
 }
 
 func (config *Config) getFiberViewsEngine() fiber.Views {
@@ -392,6 +435,8 @@ func (config *Config) setFiberConfig() {
 		DisableHeaderNormalizing:  config.GetBool("FIBER_DISABLEHEADERNORMALIZING"),
 		DisableStartupMessage:     config.GetBool("FIBER_DISABLESTARTUPMESSAGE"),
 		ReduceMemoryUsage:         config.GetBool("FIBER_REDUCEMEMORYUSAGE"),
+		JSONDecoder:               json.Unmarshal, // user faster json from goccy/go-json
+		JSONEncoder:               json.Marshal,
 	}
 }
 

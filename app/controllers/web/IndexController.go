@@ -1,36 +1,22 @@
 package web
 
 import (
-	"fiber-boilerplate/database"
-	"log"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/markbates/goth"
 )
 
-func Index(session *session.Store, db *database.Database) fiber.Handler {
+func Index(session *session.Store) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
-		auth := IsAuthenticated(session, ctx)
 
 		// Bind data to template
 		bind := fiber.Map{
 			"name": "Fiber",
-			"auth": auth,
 		}
 
-		if auth {
-			store, err := session.Get(ctx)
-			if err != nil {
-				panic(err)
-			}
-			// Get User ID from session store
-			userID := store.Get("userid").(int64)
-			user, err := FindUserByID(db, userID)
-			if err != nil {
-				log.Fatalf("Error when finding user by ID: %v", err)
-			}
-			bind["username"] = user.Name
-		}
+		BindAuthenticationData(ctx, session, bind)
+
+		// Copy auth details from goth.User to session
 
 		// Render template
 		err := ctx.Render("index", bind)
@@ -42,4 +28,51 @@ func Index(session *session.Store, db *database.Database) fiber.Handler {
 		}
 		return err
 	}
+}
+
+func BindAuthenticationData(ctx *fiber.Ctx, session *session.Store, bind fiber.Map) {
+	sess, err := session.Get(ctx)
+	if err != nil {
+		panic(err)
+	}
+	bind["auth"] = false
+	if IsAuthenticatedOauth(session, ctx) {
+		user := sess.Get("user")
+		if user != nil {
+			gu := user.(goth.User)
+			userID := gu.UserID
+			email := gu.Email
+			name := gu.Name
+			if name == "" {
+				name = email
+			}
+			bind["username"] = name
+			bind["userid"] = userID
+			bind["email"] = email
+			bind["auth"] = true
+		}
+	} else if IsAuthenticated(session, ctx) {
+		// Get User ID from session store
+		userID := sess.Get("userid")
+		email := sess.Get("email")
+		name := sess.Get("username")
+		bind["username"] = name
+		bind["userid"] = userID
+		bind["email"] = email
+		bind["auth"] = true
+
+	}
+}
+
+func IsAuthenticatedOauth(store *session.Store, ctx *fiber.Ctx) bool {
+	sess, err := store.Get(ctx)
+	if err != nil {
+		return false
+	}
+
+	user, ok := sess.Get("user").(goth.User)
+	if ok && user.UserID > "" {
+		return true
+	}
+	return false
 }

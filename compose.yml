@@ -1,0 +1,41 @@
+version: "3.9"
+
+secrets:
+  secrets.env:
+    file: ./secrets/secrets.env
+  pg_secret.txt:
+      file: ./secrets/pg_secret.txt
+
+services:
+  postgres:
+    image: postgres:15.1
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_secret.txt
+      #POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fiberdemo
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+    ports:
+      - '5438:5432'
+    volumes:
+      - ./postgres-data-15:/var/lib/postgresql/data
+    secrets:
+      - pg_secret.txt
+
+  fiber-boilerplate:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+        - postgres
+    secrets:
+      - secrets.env
+    environment:
+      SECRETS_PATH: /run/secrets/secrets.env
+
+
+

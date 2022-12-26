@@ -1,10 +1,22 @@
-Hello, {{ name }}!
+Hello, {{ email }}!
 
-{% if auth %}
-    <br /><br />You are logged-in as <b>{{ username }}</b>!<br />
-    <a href="/logout" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">Logout</a>
-    <form id="logout-form" action="/logout" method="POST" style="display: none;"></form>
+{% if email %}
+    <br /><br />You are logged-in as <b>{{ email }}</b>!<br />
+    <a href="/logout">Logout internal</a>
+    <br>
+    <a href="/oauth/logout">OAUTH2 Logout AWS Cognito</a>
 {% else %}
     <br /><br />You are not logged-in!<br />
-    <a href="/login">Log-in</a>
+    <a href="/login">Log-in internal</a>
+    <br />
+    <a href="/oauth/login/cognito">OAUTH2 Log-in AWS Cognito</a>
 {% endif %}
+
+<br />
+<a href="/metrics">Metrics</a>
+<br />
+<a href="/swagger/">Swagger docs</a>
+<br />
+<a href="/secured">Secured page</a>
+
+

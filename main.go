@@ -2,12 +2,13 @@ package main
 
 import (
 	"fiber-boilerplate/app/middleware"
+	"fiber-boilerplate/app/middleware/oauth2"
 	"fiber-boilerplate/app/models"
 	configuration "fiber-boilerplate/config"
 	"fiber-boilerplate/database"
 	"fiber-boilerplate/routes"
 	"fmt"
-
+	"github.com/gofiber/helmet/v2"
 	"os"
 	"os/signal"
 
@@ -83,12 +84,14 @@ func main() {
 
 	// Register web routes
 	web := app.Group("")
-	routes.RegisterWeb(web, app.Session, config.GetString("SESSION_LOOKUP"), app.DB, app.Hasher)
+	routes.RegisterWeb(web, app.Session, app.DB, app.Hasher)
 
 	// Register application API routes (using the /api/v1 group)
 	api := app.Group("/api")
 	apiv1 := api.Group("/v1")
-	routes.RegisterAPI(apiv1, app.DB)
+	routes.RegisterAPI(apiv1, app.DB, app.Hasher)
+
+	routes.RegisterSwagger(app.App)
 
 	// Register static routes for the public directory
 	app.Static("/", "./public")
@@ -120,6 +123,24 @@ func main() {
 }
 
 func (app *App) registerMiddlewares(config *configuration.Config) {
+
+	// TODO: Middleware - Basic Authentication
+
+	// Middleware OAUTH2 (via goth and goth_fiber)
+	if config.GetBool("MW_OAUTH2_ENABLED") {
+		app.Use(oauth2.New(app.App, app.Session, oauth2.Config{
+			Provider:               config.GetString("MW_OAUTH2_PROVIDER"),
+			BaseURL:                config.GetString("MW_OAUTH2_BASEURL"),
+			ClientKey:              config.GetString("MW_OAUTH2_KEY"),
+			Secret:                 config.GetString("MW_OAUTH2_SECRET"),
+			OrgURL:                 config.GetString("MW_OAUTH2_ORG_URL"),
+			CallbackURL:            config.GetString("MW_OAUTH2_CALLBACK_SERVER"),
+			Auth0Domain:            config.GetString("MW_OAUTH2_AUTH0_DOMAIN"),
+			AfterLoginRedirectURL:  config.GetString("MW_OAUTH2_AFTER_LOGIN_REDIRECT_URL"),
+			AfterLogoutRedirectURL: config.GetString("MW_OAUTH2_AFTER_LOGOUT_REDIRECT_URL"),
+		}))
+	}
+
 	// Middleware - Custom Access Logger based on zap
 	if config.GetBool("MW_ACCESS_LOGGER_ENABLED") {
 		app.Use(middleware.AccessLogger(&middleware.AccessLoggerConfig{
@@ -163,13 +184,6 @@ func (app *App) registerMiddlewares(config *configuration.Config) {
 		app.Use(recover.New())
 	}
 
-	// Middleware - Recover
-	if config.GetBool("MW_FIBER_RECOVER_ENABLED") {
-		app.Use(recover.New())
-	}
-
-	// TODO: Middleware - Basic Authentication
-
 	// Middleware - Cache
 	if config.GetBool("MW_FIBER_CACHE_ENABLED") {
 		app.Use(cache.New(cache.Config{
@@ -198,16 +212,18 @@ func (app *App) registerMiddlewares(config *configuration.Config) {
 		}))
 	}
 
+	if config.GetBool("MW_FIBER_HELMET_ENABLED") {
+		app.Use(helmet.New())
+	}
+
 	// Middleware - CSRF
 	if config.GetBool("MW_FIBER_CSRF_ENABLED") {
 		app.Use(csrf.New(csrf.Config{
-			TokenLookup: config.GetString("MW_FIBER_CSRF_TOKENLOOKUP"),
-			Cookie: &fiber.Cookie{
-				Name:     config.GetString("MW_FIBER_CSRF_COOKIE_NAME"),
-				SameSite: config.GetString("MW_FIBER_CSRF_COOKIE_SAMESITE"),
-			},
-			CookieExpires: config.GetDuration("MW_FIBER_CSRF_COOKIE_EXPIRES"),
-			ContextKey:    config.GetString("MW_FIBER_CSRF_CONTEXTKEY"),
+			KeyLookup:      config.GetString("MW_FIBER_CSRF_TOKENLOOKUP"),
+			CookieName:     config.GetString("MW_FIBER_CSRF_COOKIE_NAME"),
+			CookieSameSite: config.GetString("MW_FIBER_CSRF_COOKIE_SAMESITE"),
+			Expiration:     config.GetDuration("MW_FIBER_CSRF_COOKIE_EXPIRES"),
+			ContextKey:     config.GetString("MW_FIBER_CSRF_CONTEXTKEY"),
 		}))
 	}
 
@@ -236,8 +252,8 @@ func (app *App) registerMiddlewares(config *configuration.Config) {
 	// Middleware - Limiter
 	if config.GetBool("MW_FIBER_LIMITER_ENABLED") {
 		app.Use(limiter.New(limiter.Config{
-			Max:      config.GetInt("MW_FIBER_LIMITER_MAX"),
-			Duration: config.GetDuration("MW_FIBER_LIMITER_DURATION"),
+			Max:        config.GetInt("MW_FIBER_LIMITER_MAX"),
+			Expiration: config.GetDuration("MW_FIBER_LIMITER_DURATION"),
 			// TODO: Key
 			// TODO: LimitReached
 		}))
@@ -245,7 +261,7 @@ func (app *App) registerMiddlewares(config *configuration.Config) {
 
 	// Middleware - Monitor
 	if config.GetBool("MW_FIBER_MONITOR_ENABLED") {
-		app.Use(monitor.New())
+		app.Get("/metrics", monitor.New())
 	}
 
 	// Middleware - Pprof
@@ -265,6 +281,7 @@ func (app *App) registerMiddlewares(config *configuration.Config) {
 	}
 
 	// TODO: Middleware - Timeout
+
 }
 
 // Stop the Fiber application

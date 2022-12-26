@@ -12,6 +12,8 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+var logger *zap.Logger
+
 type AccessLoggerConfig struct {
 	// Type determines whether zap will be initialized as a file logger or,
 	// by default, as a console logger.
@@ -49,42 +51,43 @@ type AccessLoggerConfig struct {
 }
 
 func AccessLogger(config *AccessLoggerConfig) fiber.Handler {
-	var logger *zap.Logger
 
 	switch strings.ToLower(config.Type) {
-		case "file":
-			w := zapcore.AddSync(&lumberjack.Logger{
-				Filename:   config.Filename,
-				MaxSize:    config.MaxSize,
-				MaxAge:     config.MaxAge,
-				MaxBackups: config.MaxBackups,
-				LocalTime:  config.LocalTime,
-				Compress:   config.Compress,
-			})
-			// Create a zap core object for JSON encoding
-			core := zapcore.NewCore(
-				zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
-				w,
-				zap.InfoLevel,
-			)
-			// Create a zap logger object
-			logger = zap.New(core)
-			break
-		// Use Access Logger in console based on environment by default
-		default:
-			var err error
-			if strings.ToLower(config.Environment) == "production" {
-				logger, err = zap.NewProduction()
-			} else {
-				logger, err = zap.NewDevelopment()
-			}
-			if err != nil {
-				fmt.Println(err.Error())
-			}
-			break
+	case "file":
+		w := zapcore.AddSync(&lumberjack.Logger{
+			Filename:   config.Filename,
+			MaxSize:    config.MaxSize,
+			MaxAge:     config.MaxAge,
+			MaxBackups: config.MaxBackups,
+			LocalTime:  config.LocalTime,
+			Compress:   config.Compress,
+		})
+		// Create a zap core object for JSON encoding
+		core := zapcore.NewCore(
+			zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+			w,
+			zap.InfoLevel,
+		)
+		// Create a zap logger object
+		logger = zap.New(core)
+		break
+	// Use Access Logger in console based on environment by default
+	default:
+		var err error
+		if strings.ToLower(config.Environment) == "production" {
+			logger, err = zap.NewProduction()
+		} else {
+			logger, err = zap.NewDevelopment()
+		}
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		break
 	}
+	_ = zap.ReplaceGlobals(logger)
 
 	// Flush logger buffers, if any
+	//goland:noinspection GoUnhandledErrorResult
 	defer logger.Sync()
 
 	return func(ctx *fiber.Ctx) error {
@@ -98,6 +101,15 @@ func AccessLogger(config *AccessLoggerConfig) fiber.Handler {
 			}
 		}
 
+		username := ctx.Locals("username")
+		if username == nil {
+			username = ""
+		}
+		email := ctx.Locals("userid")
+		if email == nil {
+			email = ""
+		}
+
 		// Send structured information message to the logger
 		logger.Info(ctx.IP()+" - "+ctx.Method()+" "+ctx.OriginalURL()+" - "+strconv.Itoa(ctx.Response().StatusCode())+
 			" - "+strconv.Itoa(len(ctx.Response().Body())),
@@ -108,6 +120,9 @@ func AccessLogger(config *AccessLoggerConfig) fiber.Handler {
 			zap.String("path", ctx.OriginalURL()),
 			zap.String("protocol", ctx.Protocol()),
 			zap.Int("status", ctx.Response().StatusCode()),
+
+			zap.String("userid", username.(string)),
+			zap.String("email", email.(string)),
 
 			zap.String("x-forwarded-for", ctx.Get(fiber.HeaderXForwardedFor)),
 			zap.String("user-agent", ctx.Get(fiber.HeaderUserAgent)),

@@ -5,9 +5,16 @@ import (
 	"fiber-boilerplate/database"
 
 	"github.com/gofiber/fiber/v2"
+	hashing "github.com/thomasvvugt/fiber-hashing"
+	_ "gorm.io/gorm"
 )
 
-// Return all users as JSON
+// GetAllUsers
+//
+//	@Summary	Return all users as JSON
+//	@Produce	json
+//	@Router		/api/v1/users [get]
+//	@Success	200	{object}	[]models.UserDto
 func GetAllUsers(db *database.Database) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		var Users []models.User
@@ -34,7 +41,13 @@ func GetAllUsers(db *database.Database) fiber.Handler {
 	}
 }
 
-// Return a single user as JSON
+// GetUser
+//
+//	@Summary	Return a single user as JSON
+//	@Produce	json
+//	@Router		/api/v1/users/{id} [get]
+//	@Param		id	path		string	true	"User ID"
+//	@Success	200	{object}	models.UserDto
 func GetUser(db *database.Database) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		User := new(models.User)
@@ -73,13 +86,25 @@ func GetUser(db *database.Database) fiber.Handler {
 	}
 }
 
-// Add a single user to the database
-func AddUser(db *database.Database) fiber.Handler {
+// AddUser
+//
+//	@Summary	Add a single user to the database
+//	@Produce	json
+//	@Accept		json
+//	@Router		/api/v1/users [post]
+//	@Param		request	body		models.UserDto	true	"User data"
+//	@Success	200		{object}	models.UserDto
+func AddUser(db *database.Database, hasher hashing.Driver) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
-		User := new(models.User)
-		if err := ctx.BodyParser(User); err != nil {
+		FormUser := new(models.UserDto)
+		if err := ctx.BodyParser(FormUser); err != nil {
 			panic("An error occurred when parsing the new user: " + err.Error())
 		}
+		User := new(models.User)
+		User.Name = FormUser.Name
+		User.Email = FormUser.Email
+		User.RoleID = FormUser.RoleID
+		User.Password, _ = hasher.CreateHash(FormUser.Password)
 		if response := db.Create(&User); response.Error != nil {
 			panic("An error occurred when storing the new user: " + response.Error.Error())
 		}
@@ -101,13 +126,21 @@ func AddUser(db *database.Database) fiber.Handler {
 	}
 }
 
-// Edit a single user
-func EditUser(db *database.Database) fiber.Handler {
+// EditUser
+//
+//	@Summary	Edit a single user
+//	@Produce	json
+//	@Accept		json
+//	@Router		/api/v1/users/{id} [put]
+//	@Param		id		path		string			true	"User ID"
+//	@Param		request	body		models.UserDto	true	"User data"
+//	@Success	200		{object}	models.UserDto
+func EditUser(db *database.Database, hasher hashing.Driver) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		id := ctx.Params("id")
-		EditUser := new(models.User)
+		FormUser := new(models.UserDto)
 		User := new(models.User)
-		if err := ctx.BodyParser(EditUser); err != nil {
+		if err := ctx.BodyParser(FormUser); err != nil {
 			panic("An error occurred when parsing the edited user: " + err.Error())
 		}
 		if response := db.Find(&User, id); response.Error != nil {
@@ -127,9 +160,12 @@ func EditUser(db *database.Database) fiber.Handler {
 			}
 			return err
 		}
-		User.Name = EditUser.Name
-		User.Email = EditUser.Email
-		User.RoleID = EditUser.RoleID
+		User.Name = FormUser.Name
+		User.Email = FormUser.Email
+		User.RoleID = FormUser.RoleID
+		if len(FormUser.Password) > 0 {
+			User.Password, _ = hasher.CreateHash(FormUser.Password)
+		}
 		// Match role to user
 		if User.RoleID != 0 {
 			Role := new(models.Role)
@@ -151,7 +187,14 @@ func EditUser(db *database.Database) fiber.Handler {
 	}
 }
 
-// Delete a single user
+// DeleteUser
+//
+//	@Summary	Delete a single user
+//	@Produce	json
+//	@Accept		json
+//	@Router		/api/v1/users/{id} [delete]
+//	@Param		id	path	string	true	"User ID"
+//	@Success	200
 func DeleteUser(db *database.Database) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		id := ctx.Params("id")
@@ -163,7 +206,7 @@ func DeleteUser(db *database.Database) fiber.Handler {
 		db.Delete(&User)
 
 		err := ctx.JSON(fiber.Map{
-			"ID": id,
+			"ID":      id,
 			"Deleted": true,
 		})
 		if err != nil {

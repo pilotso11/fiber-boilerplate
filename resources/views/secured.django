@@ -1,0 +1,6 @@
+<br /><br />
+<h2>This page is secured</h2>
+You are logged-in as <b>{{ email }}</b><br />
+
+<br />
+<a href=/>Home</a>

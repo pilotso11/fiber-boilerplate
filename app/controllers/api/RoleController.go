@@ -7,7 +7,13 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// Return all roles as JSON
+// GetAllRoles
+//
+//	@Summary	Return all roles as JSON
+//	@Router		/api/v1/roles [get]
+//	@Produce	json
+//	@Accept		json
+//	@Success	200	{object}	[]models.RoleDto
 func GetAllRoles(db *database.Database) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		var Role []models.Role
@@ -22,7 +28,14 @@ func GetAllRoles(db *database.Database) fiber.Handler {
 	}
 }
 
-// Return a single role as JSON
+// GetRole
+//
+//	@Summary	Return a single role as JSON
+//	@Router		/api/v1/roles/{id} [get]
+//	@Produce	json
+//	@Accept		json
+//	@Param		id	path		string	true	"Role ID"
+//	@Success	200	{object}	models.RoleDto
 func GetRole(db *database.Database) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		Role := new(models.Role)
@@ -53,7 +66,14 @@ func GetRole(db *database.Database) fiber.Handler {
 	}
 }
 
-// Add a single role to the database
+// AddRole
+//
+//	@Summary	Add a single role to the database
+//	@Router		/api/v1/roles [post]
+//	@Produce	json
+//	@Accept		json
+//	@Param		request	body		models.RoleDto	true	"Role data"
+//	@Success	200		{object}	models.RoleDto
 func AddRole(db *database.Database) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		Role := new(models.Role)
@@ -71,13 +91,21 @@ func AddRole(db *database.Database) fiber.Handler {
 	}
 }
 
-// Edit a single role
+// EditRole
+//
+//	@Summary	Edit a single role
+//	@Router		/api/v1/roles/{id} [put]
+//	@Produce	json
+//	@Accept		json
+//	@Param		id		path		string			true	"User ID"
+//	@Param		request	body		models.RoleDto	true	"Role data"
+//	@Success	200		{object}	models.RoleDto
 func EditRole(db *database.Database) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		id := ctx.Params("id")
-		EditRole := new(models.Role)
+		FormRole := new(models.Role)
 		Role := new(models.Role)
-		if err := ctx.BodyParser(EditRole); err != nil {
+		if err := ctx.BodyParser(FormRole); err != nil {
 			panic("An error occurred when parsing the edited role: " + err.Error())
 		}
 		if response := db.Find(&Role, id); response.Error != nil {
@@ -97,8 +125,8 @@ func EditRole(db *database.Database) fiber.Handler {
 			}
 			return err
 		}
-		Role.Name = EditRole.Name
-		Role.Description = EditRole.Description
+		Role.Name = FormRole.Name
+		Role.Description = FormRole.Description
 		db.Save(&Role)
 
 		err := ctx.JSON(Role)
@@ -109,7 +137,14 @@ func EditRole(db *database.Database) fiber.Handler {
 	}
 }
 
-// Delete a single role
+// DeleteRole
+//
+//	@Summary	Delete a single role
+//	@Router		/api/v1/roles/{id} [delete]
+//	@Produce	json
+//	@Accept		json
+//	@Param		id	path	string	true	"Role ID"
+//	@Success	200
 func DeleteRole(db *database.Database) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		id := ctx.Params("id")
@@ -121,7 +156,7 @@ func DeleteRole(db *database.Database) fiber.Handler {
 		db.Delete(&Role)
 
 		err := ctx.JSON(fiber.Map{
-			"ID": id,
+			"ID":      id,
 			"Deleted": true,
 		})
 		if err != nil {

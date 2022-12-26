@@ -3,12 +3,10 @@ package web
 import (
 	"fiber-boilerplate/database"
 	"fmt"
-	"log"
-	"strings"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
 	hashing "github.com/thomasvvugt/fiber-hashing"
+	"log"
 )
 
 func IsAuthenticated(session *session.Store, ctx *fiber.Ctx) (authenticated bool) {
@@ -17,7 +15,7 @@ func IsAuthenticated(session *session.Store, ctx *fiber.Ctx) (authenticated bool
 		panic(err)
 	}
 	// Get User ID from session store
-	userID, correct := store.Get("userid").(int64)
+	userID, correct := store.Get("userid").(uint)
 	if !correct {
 		userID = 0
 	}
@@ -40,6 +38,15 @@ func ShowLoginForm() fiber.Handler {
 	}
 }
 
+// PostLoginForm
+//
+//	@Summary	Login
+//	@Produce	json
+//	@Accept		json
+//	@Router		/login [post]
+//	@Param		username	formData	string	true	"User ID"
+//	@Param		password	formData	string	true	"Password"
+//	@Success	200
 func PostLoginForm(hasher hashing.Driver, session *session.Store, db *database.Database) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		username := ctx.FormValue("username")
@@ -54,18 +61,27 @@ func PostLoginForm(hasher hashing.Driver, session *session.Store, db *database.D
 			password := ctx.FormValue("password")
 			match, err := hasher.MatchHash(password, user.Password)
 			if err != nil {
-				log.Fatalf("Error when matching hash for password: %v", err)
+				err := ctx.SendString("The entered details do not match our records.")
+				if err != nil {
+					err.Error()
+				}
+				return nil
 			}
 			if match {
 				store, err := session.Get(ctx)
 				if err != nil {
 					panic(err)
 				}
-				defer store.Save()
+				//goland:noinspection ALL
 				// Set the user ID in the session store
 				store.Set("userid", user.ID)
+				store.Set("email", user.Email)
+				store.Set("username", user.Name)
+				_ = store.Save()
 				fmt.Printf("User set in session store with ID: %v\n", user.ID)
-				if err := ctx.SendString("You should be logged in successfully!"); err != nil {
+				err = ctx.Redirect("/")
+				if err != nil {
+					//if err := ctx.SendString("You should be logged in successfully!"); err != nil {
 					panic(err.Error())
 				}
 			} else {
@@ -80,30 +96,23 @@ func PostLoginForm(hasher hashing.Driver, session *session.Store, db *database.D
 	}
 }
 
-func PostLogoutForm(sessionLookup string, session *session.Store, db *database.Database) fiber.Handler {
+// PostLogoutForm
+//
+//	@Summary	Logout
+//	@Produce	json
+//	@Accept		json
+//	@Router		/logout [get]
+//	@Success	200
+func PostLogoutForm(session *session.Store) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		if IsAuthenticated(session, ctx) {
 			store, err := session.Get(ctx)
 			if err != nil {
 				panic(err)
 			}
-			store.Delete("userid")
-			if err := store.Save(); err != nil {
-				panic(err.Error())
-			}
-			// Check if cookie needs to be unset
-			split := strings.Split(sessionLookup, ":")
-			if strings.ToLower(split[0]) == "cookie" {
-				// Unset cookie on client-side
-				ctx.Set("Set-Cookie", split[1]+"=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; HttpOnly")
-				if err := ctx.SendString("You are now logged out."); err != nil {
-					panic(err.Error())
-				}
-				return nil
-			}
-			return nil
+			_ = store.Regenerate()
 		}
-		// TODO: Redirect?
-		return nil
+		return ctx.Redirect("/")
+
 	}
 }
