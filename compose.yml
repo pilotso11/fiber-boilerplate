@@ -9,7 +9,7 @@ secrets:
 services:
   postgres:
     image: postgres:15.1
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD_FILE: /run/secrets/pg_secret.txt
@@ -20,7 +20,7 @@ services:
         max-size: 10m
         max-file: "3"
     ports:
-      - '5438:5432'
+      - '5438:5432'         # Exposed on a different port internally on docker (5432) and externally on localhost (5438)
     volumes:
       - ./postgres-data-15:/var/lib/postgresql/data
     secrets:
@@ -28,6 +28,7 @@ services:
 
   fiber-boilerplate:
     build: .
+    restart: unless-stopped
     ports:
       - "8080:8080"
     depends_on:
