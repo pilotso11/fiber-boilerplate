@@ -106,3 +106,4 @@ go.work
 secrets/
 .sedrets/
 
+/postgres-data-15/
